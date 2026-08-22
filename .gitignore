@@ -1,0 +1,6 @@
+*.bin
+*.img
+*.log
+__pycache__/
+mnt_*/
+work_*/

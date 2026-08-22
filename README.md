@@ -17,6 +17,23 @@ Há dois métodos complementares:
 > para reparar. Faça backup antes de gravar partições. Um preloader, layout ou
 > `vbmeta` incompatível pode impedir o aparelho de iniciar.
 
+## Uso fácil — assistente interativo
+
+Para a maioria das pessoas, basta clonar o projeto e abrir o assistente:
+
+```bash
+git clone https://github.com/Raskinkamar/ml-ji0l-m10-4g-desbloqueio.git
+cd ml-ji0l-m10-4g-desbloqueio
+./desbloquear_m10.sh
+```
+
+O menu prepara `super`, prepara `vbmeta_a`, conduz a gravação, aplica o bloqueio
+ADB e verifica o resultado. Antes de excluir ou gravar algo, ele valida o tamanho
+da imagem, o layout de `product_a`, o nome interno do APK e as flags AVB, além de
+pedir uma confirmação explícita.
+
+Se preferir entender ou executar tudo manualmente, continue pelo guia abaixo.
+
 ## O que é bloqueado
 
 Pacote:
@@ -256,4 +273,3 @@ dado de DRAM e restaure os backups originais de `super` e `vbmeta_a`.
 Não experimente com `preloader`, `nvram`, `nvdata`, `persist`, `proinfo`, RPMB ou
 OTP. Essas regiões podem conter calibração e dados de segurança exclusivos do
 aparelho.
-

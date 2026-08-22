@@ -12,18 +12,18 @@ printf 'boot_completed=%s\n' "$(adb shell getprop sys.boot_completed | tr -d '\r
 printf 'verified_boot_state=%s\n' "$(adb shell getprop ro.boot.verifiedbootstate | tr -d '\r')"
 
 if adb shell pm path "$package" | grep -q '^package:'; then
-    echo 'oobconfig=present'
+    echo 'oobconfig=presente'
     adb shell pm path "$package"
     exit 2
 fi
 
-echo 'oobconfig=absent'
+echo 'oobconfig=ausente'
 if adb shell cmd package resolve-activity --brief -n "$component" 2>&1 \
     | grep -qv 'No activity found'; then
-    echo 'factory_reset_activity=unexpectedly_resolvable'
+    echo 'factory_reset_activity=ativa_inesperadamente'
     exit 3
 fi
-echo 'factory_reset_activity=absent'
+echo 'factory_reset_activity=ausente'
 
 for google_package in \
     com.android.vending \
@@ -31,9 +31,8 @@ for google_package in \
     com.google.android.gsf \
     com.google.android.setupwizard; do
     if adb shell pm path "$google_package" | grep -q '^package:'; then
-        echo "$google_package=present"
+        echo "$google_package=presente"
     else
-        echo "$google_package=missing"
+        echo "$google_package=ausente"
     fi
 done
-

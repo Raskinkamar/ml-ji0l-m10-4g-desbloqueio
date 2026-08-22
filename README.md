@@ -1,115 +1,138 @@
-# M10 MTK Preloader Recovery and OobConfig Removal
+# Desbloqueio do tablet ML-JI0L M10 4G
 
-Owner-authorized recovery notes for the `M10_4G` (`ML_JI0L_M10_4G`) tablet,
-tested on the MediaTek MT6765/MT8768t platform with dynamic partitions.
+Guia em português para remover e bloquear o Google Device Setup/OobConfig no
+tablet `M10_4G`, variante `ML_JI0L_M10_4G`, plataforma MediaTek
+MT6765/MT8768t.
 
-This project documents how to:
+Há dois métodos complementares:
 
-- connect to an authorized device through MediaTek Preloader/BROM;
-- use a matching preloader image only as DRAM initialization data;
-- restore a known-good `super` image;
-- remove Google Device Setup (`com.google.android.apps.work.oobconfig`);
-- prepare `vbmeta_a` for a deliberately modified logical partition;
-- verify the result over ADB and detect a package restored by an OTA.
+1. **Remoção pelo Preloader/BROM:** retira o APK de `product_a` antes de iniciar
+   o Android. É o método principal e sobrevive a reinícios e restaurações de
+   fábrica.
+2. **Bloqueio pelo ADB:** quando o Android já está inicializado, bloqueia a
+   Activity de reset, restringe a execução em segundo plano e desativa o pacote
+   para o usuário principal. É útil se uma atualização restaurar o aplicativo.
 
-It is not a carrier/SIM unlock, FRP bypass, bootloader unlock, or authorization to
-modify a managed device. Use it only on hardware you own or are authorized to
-service. Removing enrollment/provisioning software may violate an organization's
-policy or local law. All commands are destructive unless explicitly described as
-read-only.
+> Use somente em um tablet seu ou em equipamento que você tenha autorização
+> para reparar. Faça backup antes de gravar partições. Um preloader, layout ou
+> `vbmeta` incompatível pode impedir o aparelho de iniciar.
 
-## Tested layout
+## O que é bloqueado
 
-The tested GPT contained a 4 GiB `super` partition. Slot 0 metadata described:
+Pacote:
 
-| Logical partition | First sector in `super` | Byte offset | Size |
-| --- | ---: | ---: | ---: |
-| `product_a` | 2,048 | 1,048,576 | 1,218,813,952 bytes |
-| `vendor_a` | 2,383,872 | 1,220,542,464 | 186,642,432 bytes |
-| `system_a` | 2,748,416 | 1,407,188,992 | 1,263,587,328 bytes |
+```text
+com.google.android.apps.work.oobconfig
+```
 
-Never reuse these offsets blindly. Verify them with `lpdump` on the exact image.
-The tested OobConfig files existed only at:
+Activity de reset/zero-touch:
+
+```text
+com.google.android.apps.work.oobconfig/.zerotouch.FactoryResetActivity
+```
+
+No firmware testado, o APK estava somente em:
 
 ```text
 product_a:/priv-app/OobConfig/
 ```
 
-No second copy was found in `system_a`.
+Não foi encontrada outra cópia em `system_a`.
 
-## Requirements
+## Arquivos e ferramentas necessários
 
-- Linux with Python 3, `libusb`, and FUSE access
-- [mtkclient](https://github.com/bkerler/mtkclient)
-- Android platform-tools (`adb`)
-- Android logical-partition tools (`lpdump`, `lpunpack`, `lpmake`)
-- `fuse2fs`, `debugfs`, and `apkanalyzer`
-- a device-specific preloader extracted from the same firmware/device family
-- verified backups of `super`, `vbmeta_a`, and critical device partitions
+- Linux com Python 3, `libusb` e FUSE;
+- [mtkclient](https://github.com/bkerler/mtkclient);
+- Android platform-tools (`adb`);
+- `lpdump`, `lpunpack`, `lpmake`, `fuse2fs` e `apkanalyzer`;
+- preloader correto da variante, usado apenas para inicializar a DRAM;
+- backups verificados de `super`, `vbmeta_a` e partições críticas.
 
-The preloader used in the tested session had this SHA-256:
+O preloader usado no teste tinha este SHA-256:
 
 ```text
 ca8c09a3b283289779be321eb11a25d601154786a7cc33757ea5a4ef541f8e6d
 ```
 
-That hash is documentation, not proof that the file matches another tablet.
-Never flash the preloader as part of this procedure; pass it only via
-`--preloader=...` for DRAM setup.
+Esse hash é apenas uma referência do aparelho testado. Não grave o preloader no
+tablet durante este procedimento. Passe-o somente ao mtkclient com
+`--preloader=/caminho/preloader.bin` para configurar a DRAM.
 
-## 1. Verify inputs
+## Layout testado
+
+A GPT possuía uma partição física `super` de 4 GiB. Os metadados do slot 0 eram:
+
+| Partição lógica | Primeiro setor em `super` | Offset em bytes | Tamanho |
+| --- | ---: | ---: | ---: |
+| `product_a` | 2.048 | 1.048.576 | 1.218.813.952 bytes |
+| `vendor_a` | 2.383.872 | 1.220.542.464 | 186.642.432 bytes |
+| `system_a` | 2.748.416 | 1.407.188.992 | 1.263.587.328 bytes |
+
+Confira sempre com `lpdump`. Não reutilize esses offsets em outra imagem ou
+variante sem validar o layout.
+
+---
+
+## Método 1 — remover pelo Preloader/BROM
+
+Embora muita gente chame esta etapa de “bootloader”, o acesso usado aqui é o
+MediaTek Preloader/BROM com um Download Agent do mtkclient.
+
+### 1. Verificar os backups
 
 ```bash
-sha256sum /path/to/preloader.bin /path/to/super_full.bin /path/to/vbmeta_a.bin
-lpdump /path/to/super_full.bin
+sha256sum /caminho/preloader.bin \
+          /caminho/super_full.bin \
+          /caminho/vbmeta_a.bin
+
+lpdump /caminho/super_full.bin
 ```
 
-Confirm the hardware, image provenance, logical partition names, extents, and
-sizes before connecting the tablet.
+Confirme o chipset, a origem das imagens, os nomes, tamanhos e extents das
+partições lógicas.
 
-## 2. Read the GPT through BROM
+### 2. Conectar e ler a GPT
 
-Run from the mtkclient checkout:
+Execute dentro do checkout do mtkclient:
 
 ```bash
-python3 mtk.py printgpt --preloader=/path/to/preloader.bin
+python3 mtk.py printgpt \
+  --preloader=/caminho/preloader.bin
 ```
 
-Power the tablet off. For BROM, connect USB while holding both volume buttons.
-The successful tested sequence reported `DRAM setup passed` before listing GPT.
-Stop if the chipset, eMMC, partition layout, or DRAM setup differs.
+Desligue o tablet e conecte o USB segurando Volume+ e Volume−. No teste, a
+sequência válida exibiu `DRAM setup passed` antes da GPT. Pare se o hardware ou
+layout detectado for diferente.
 
-## 3. Prepare a modified `super` image
-
-Preserve the original and work on a copy:
+### 3. Preparar uma cópia de `super`
 
 ```bash
-cp --reflink=auto super_full.bin super_patched.bin
+cp --reflink=auto super_full.bin super_sem_oobconfig.bin
 mkdir -p mnt_product
-lpdump super_patched.bin
+lpdump super_sem_oobconfig.bin
 ```
 
-For the tested layout only, mount `product_a` at byte offset 1,048,576:
+Somente para o layout testado, monte `product_a` no offset 1.048.576:
 
 ```bash
-fuse2fs super_patched.bin mnt_product \
+fuse2fs super_sem_oobconfig.bin mnt_product \
   -o rw,fakeroot,offset=1048576
 ```
 
-Verify the APK identity before removal:
+Confirme o nome interno do APK antes de remover:
 
 ```bash
 apkanalyzer manifest application-id \
   mnt_product/priv-app/OobConfig/OobConfig.apk
 ```
 
-Expected output:
+O resultado esperado é:
 
 ```text
 com.google.android.apps.work.oobconfig
 ```
 
-Remove only the verified directory, sync, and unmount:
+Remova apenas o diretório confirmado:
 
 ```bash
 rm -rf -- mnt_product/priv-app/OobConfig
@@ -117,78 +140,120 @@ sync
 fusermount3 -u mnt_product
 ```
 
-Mount the same offset read-only and confirm that `find` returns no match before
-flashing. Run `lpdump` again to ensure the logical-partition metadata is intact.
+Monte novamente como somente leitura e confirme que não existe `OobConfig`.
+Execute `lpdump` outra vez para verificar que os metadados de `super` continuam
+intactos.
 
-## 4. Prepare `vbmeta_a`
+### 4. Preparar `vbmeta_a`
 
-Changing `product_a` invalidates its verified-boot hash. On an owner-unlocked
-device, prepare a copy of the matching `vbmeta_a` with flags `3` (disable verity
-and verification):
+A alteração de `product_a` invalida o hash do Android Verified Boot. Em aparelho
+com desbloqueio autorizado, prepare uma cópia compatível de `vbmeta_a` com as
+flags `3` (desativar verity e verification):
 
 ```bash
-python3 scripts/patch_vbmeta_flags.py \
-  /path/to/vbmeta_a.bin vbmeta_a_flags3.bin
+python3 scripts/preparar_vbmeta.py \
+  /caminho/vbmeta_a.bin vbmeta_a_flags3.bin
 ```
 
-The script refuses non-AVB images and unexpected existing flags. This does not
-unlock a bootloader. A locked device can reject modified images or fail to boot.
+O script recusa imagens sem o cabeçalho `AVB0`, flags inesperadas e alteração do
+arquivo de origem. Ele não desbloqueia um bootloader bloqueado.
 
-## 5. Flash and factory-reset
+### 5. Gravar e limpar os dados
 
-The following commands overwrite data. Keep stable USB power and do not unplug
-during writes:
+Os comandos abaixo sobrescrevem partições. Não desconecte o USB durante a
+gravação:
 
 ```bash
-python3 mtk.py w super /path/to/super_patched.bin \
-  --preloader=/path/to/preloader.bin
+python3 mtk.py w super /caminho/super_sem_oobconfig.bin \
+  --preloader=/caminho/preloader.bin
 
-python3 mtk.py w vbmeta_a /path/to/vbmeta_a_flags3.bin \
-  --preloader=/path/to/preloader.bin
+python3 mtk.py w vbmeta_a /caminho/vbmeta_a_flags3.bin \
+  --preloader=/caminho/preloader.bin
 
 python3 mtk.py e userdata,metadata \
-  --preloader=/path/to/preloader.bin
+  --preloader=/caminho/preloader.bin
 ```
 
-The tested tablet used slot `_a`. Verify the active slot instead of assuming it.
-Do not erase `system_a`; it is a logical partition inside `super`.
+O aparelho testado usava o slot `_a`. Confirme o slot do seu aparelho. Não
+apague `system_a`: ele é uma partição lógica dentro de `super`.
 
-## 6. Verify after boot
+### 6. Verificar após iniciar
 
-Enable USB debugging, authorize the host, then run:
+Ative a depuração USB, autorize o computador e execute:
 
 ```bash
-./scripts/verify_oobconfig.sh
+./scripts/verificar_desbloqueio.sh
 ```
 
-Expected results include `sys.boot_completed=1`, no OobConfig package/activity,
-and the normal Google packages still installed.
+O resultado esperado é:
 
-## OTA behavior
+- `boot_completed=1`;
+- `oobconfig=ausente`;
+- `factory_reset_activity=ausente`;
+- Play Store, Play Services, GSF e Setup Wizard presentes.
 
-A reboot or factory reset does not recreate a file removed from `product_a`.
-A full firmware flash or OTA may replace `product_a` and restore the package.
-The Android developer setting below disables automatic OTA application on builds
-that honor it, but does not prevent a user-initiated update:
+---
+
+## Método 2 — bloquear com o Android inicializado
+
+Use este método quando o pacote ainda estiver instalado ou se uma OTA/regravação
+o restaurar. Ele faz, nesta ordem:
+
+1. bloqueia `FactoryResetActivity`;
+2. nega wake lock e execução em segundo plano;
+3. nega início em primeiro plano e configurações restritas, quando suportados;
+4. desativa todo o pacote para o usuário 0.
+
+Com a depuração USB autorizada:
+
+```bash
+./scripts/bloquear_oobconfig_adb.sh
+```
+
+Os comandos principais são:
+
+```bash
+adb shell pm disable-user --user 0 \
+  com.google.android.apps.work.oobconfig/.zerotouch.FactoryResetActivity
+
+adb shell cmd appops set com.google.android.apps.work.oobconfig WAKE_LOCK deny
+adb shell cmd appops set com.google.android.apps.work.oobconfig RUN_IN_BACKGROUND deny
+adb shell cmd appops set com.google.android.apps.work.oobconfig RUN_ANY_IN_BACKGROUND deny
+adb shell cmd appops set com.google.android.apps.work.oobconfig START_FOREGROUND deny
+adb shell cmd appops set com.google.android.apps.work.oobconfig ACCESS_RESTRICTED_SETTINGS deny
+
+adb shell pm disable-user --user 0 \
+  com.google.android.apps.work.oobconfig
+```
+
+Se o APK já foi removido pelo Método 1, o script informa que o pacote está
+ausente e não altera nada.
+
+## Proteção após atualizações
+
+Reiniciar, desligar ou restaurar os dados de fábrica não recria o APK removido de
+`product_a`. Uma OTA ou regravação completa pode substituir `product_a`.
+
+Para desativar a aplicação automática de OTA em builds que respeitam a opção:
 
 ```bash
 adb shell settings put global ota_disable_automatic_update 1
 ```
 
-After any update, run:
+Isso não impede uma atualização iniciada manualmente. Depois de qualquer
+atualização, execute novamente:
 
 ```bash
-./scripts/oobconfig_post_ota_guard.sh
+./scripts/bloquear_oobconfig_adb.sh
+./scripts/verificar_desbloqueio.sh
 ```
 
-If the package is absent, the script changes nothing. If it has returned, the
-script disables its reset Activity, applies background app-ops where supported,
-and disables the package for user 0. Review the script before use.
+## Recuperação
 
-## Recovery
+Se o Android não iniciar, volte ao BROM usando o preloader compatível apenas como
+dado de DRAM e restaure os backups originais de `super` e `vbmeta_a`.
 
-If Android fails to boot, return to BROM using the matching preloader as DRAM
-data and restore the unmodified, checksum-verified `super` and `vbmeta_a` backups.
-Do not experiment with `preloader`, `nvram`, `nvdata`, `persist`, `proinfo`, RPMB,
-or OTP; those partitions can contain device-unique calibration or security data.
+Não experimente com `preloader`, `nvram`, `nvdata`, `persist`, `proinfo`, RPMB ou
+OTP. Essas regiões podem conter calibração e dados de segurança exclusivos do
+aparelho.
 

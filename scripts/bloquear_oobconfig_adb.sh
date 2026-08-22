@@ -7,11 +7,11 @@ component="$package/.zerotouch.FactoryResetActivity"
 adb get-state >/dev/null
 
 if ! adb shell pm path "$package" | grep -q '^package:'; then
-    echo 'OobConfig is absent; no changes were made.'
+    echo 'OobConfig está ausente; nenhuma alteração foi necessária.'
     exit 0
 fi
 
-echo 'OobConfig was restored. Applying user-0 restrictions.'
+echo 'OobConfig encontrado. Aplicando bloqueios ao usuário 0.'
 
 adb shell pm disable-user --user 0 "$component" || true
 
@@ -24,10 +24,9 @@ for operation in \
     if adb shell cmd appops set "$package" "$operation" deny; then
         echo "$operation=deny"
     else
-        echo "$operation=unsupported"
+        echo "$operation=não_suportada"
     fi
 done
 
 adb shell pm disable-user --user 0 "$package"
-echo 'OobConfig is disabled for user 0.'
-
+echo 'OobConfig foi desativado para o usuário 0.'

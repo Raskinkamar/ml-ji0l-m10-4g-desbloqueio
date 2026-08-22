@@ -1,6 +1,6 @@
 # Desbloqueio do tablet ML-JI0L M10 4G
 
-Guia em português para remover e bloquear o Google Device Setup/OobConfig no
+Guia para remover e bloquear o Google Device Setup/OobConfig no
 tablet `M10_4G`, variante `ML_JI0L_M10_4G`, plataforma MediaTek
 MT6765/MT8768t.
 
